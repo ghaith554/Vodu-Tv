@@ -1,0 +1,495 @@
+name: Build TV APK
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+      - name: Write project files
+        run: |
+          mkdir -p app app/src/main app/src/main/java/com/example/vodumovie app/src/main/res/drawable app/src/main/res/layout app/src/main/res/values
+          cat > settings.gradle.kts <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "VoduMovie"
+          include(":app")
+          EOF
+          cat > build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.7.3" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+          }
+          EOF
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          EOF
+          cat > app/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.example.vodumovie"
+              compileSdk = 35
+
+              defaultConfig {
+                  applicationId = "com.example.vodumovie"
+                  minSdk = 24
+                  targetSdk = 35
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+              buildTypes { release { isMinifyEnabled = false } }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = "17" }
+          }
+
+          dependencies {
+              implementation("androidx.core:core-ktx:1.15.0")
+              implementation("androidx.appcompat:appcompat:1.7.0")
+              implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+          }
+          EOF
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+              <uses-feature android:name="android.software.leanback" android:required="false" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:banner="@drawable/banner"
+                  android:label="@string/app_name"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.App"
+                  android:usesCleartextTraffic="false">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation|smallestScreenSize|screenLayout|uiMode">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          cat > app/src/main/res/values/strings.xml <<'EOF'
+          <resources>
+              <string name="app_name">Vodu Movie</string>
+          </resources>
+          EOF
+          cat > app/src/main/res/values/themes.xml <<'EOF'
+          <resources>
+              <style name="Theme.App" parent="Theme.AppCompat.DayNight.NoActionBar">
+                  <item name="android:windowBackground">#0F0F0F</item>
+                  <item name="android:statusBarColor">@android:color/transparent</item>
+                  <item name="android:navigationBarColor">@android:color/transparent</item>
+              </style>
+          </resources>
+          EOF
+          cat > app/src/main/res/drawable/ic_launcher.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#0F0F0F" android:pathData="M0,0h108v108h-108z" />
+              <path android:fillColor="#E50914" android:pathData="M42,32L42,76L78,54z" />
+          </vector>
+          EOF
+          cat > app/src/main/res/drawable/banner.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="320dp" android:height="180dp"
+              android:viewportWidth="320" android:viewportHeight="180">
+              <path android:fillColor="#0F0F0F" android:pathData="M0,0h320v180h-320z" />
+              <path android:fillColor="#E50914" android:pathData="M138,60L138,120L192,90z" />
+          </vector>
+          EOF
+          cat > app/src/main/res/layout/activity_main.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:id="@+id/root"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="#0F0F0F">
+
+              <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+                  android:id="@+id/refresh"
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent">
+
+                  <WebView
+                      android:id="@+id/webview"
+                      android:layout_width="match_parent"
+                      android:layout_height="match_parent" />
+              </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+              <ProgressBar
+                  android:id="@+id/progress"
+                  style="?android:attr/progressBarStyleHorizontal"
+                  android:layout_width="match_parent"
+                  android:layout_height="3dp"
+                  android:max="100"
+                  android:visibility="gone" />
+
+              <FrameLayout
+                  android:id="@+id/fullscreen"
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent"
+                  android:background="#000000"
+                  android:visibility="gone" />
+          </FrameLayout>
+          EOF
+          cat > app/src/main/java/com/example/vodumovie/MainActivity.kt <<'EOF'
+          package com.example.vodumovie
+
+          import android.annotation.SuppressLint
+          import android.app.UiModeManager
+          import android.content.Context
+          import android.content.Intent
+          import android.content.pm.ActivityInfo
+          import android.content.pm.PackageManager
+          import android.content.res.Configuration
+          import android.graphics.Bitmap
+          import android.os.Bundle
+          import android.os.SystemClock
+          import android.view.InputDevice
+          import android.view.KeyEvent
+          import android.view.MotionEvent
+          import android.view.View
+          import android.view.ViewGroup
+          import android.webkit.CookieManager
+          import android.webkit.WebChromeClient
+          import android.webkit.WebResourceError
+          import android.webkit.WebResourceRequest
+          import android.webkit.WebSettings
+          import android.webkit.WebView
+          import android.webkit.WebViewClient
+          import android.widget.FrameLayout
+          import android.widget.ProgressBar
+          import androidx.activity.OnBackPressedCallback
+          import androidx.appcompat.app.AppCompatActivity
+          import androidx.core.view.ViewCompat
+          import androidx.core.view.WindowCompat
+          import androidx.core.view.WindowInsetsCompat
+          import androidx.core.view.WindowInsetsControllerCompat
+          import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+
+          class MainActivity : AppCompatActivity() {
+
+              // ===== غيّر هذين السطرين لموقعك =====
+              private val startUrl = "https://movie.vodu.me/"
+              private val allowedHost = "vodu.me"
+              // ====================================
+
+              private lateinit var webView: WebView
+              private lateinit var refresh: SwipeRefreshLayout
+              private lateinit var progress: ProgressBar
+              private lateinit var fullscreen: FrameLayout
+              private lateinit var cursor: CursorView
+              private var customView: View? = null
+              private var customCallback: WebChromeClient.CustomViewCallback? = null
+
+              // هل الجهاز تلفاز (ريموت بدون شاشة لمس)؟
+              private val isTv by lazy {
+                  val ui = getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
+                  ui.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
+                      !packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
+              }
+
+              private val offlineHtml = """
+                  <html dir="rtl"><body style="background:#0F0F0F;color:#fff;font-family:sans-serif;
+                  display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0">
+                  <h3>لا يوجد اتصال بالإنترنت</h3>
+                  <a href="$startUrl" style="color:#fff;background:#E50914;padding:10px 24px;
+                  border-radius:8px;text-decoration:none">إعادة المحاولة</a></body></html>
+              """.trimIndent()
+
+              private val chromeClient = object : WebChromeClient() {
+                  override fun onProgressChanged(view: WebView, newProgress: Int) {
+                      progress.progress = newProgress
+                      progress.visibility = if (newProgress in 1..99) View.VISIBLE else View.GONE
+                  }
+
+                  override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+                      if (customView != null) { callback.onCustomViewHidden(); return }
+                      customView = view
+                      customCallback = callback
+                      fullscreen.addView(
+                          view,
+                          FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                      )
+                      fullscreen.visibility = View.VISIBLE
+                      refresh.visibility = View.GONE
+                      requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                      hideBars(true)
+                  }
+
+                  override fun onHideCustomView() {
+                      val v = customView ?: return
+                      fullscreen.removeView(v)
+                      fullscreen.visibility = View.GONE
+                      refresh.visibility = View.VISIBLE
+                      customCallback?.onCustomViewHidden()
+                      customView = null
+                      customCallback = null
+                      requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                      hideBars(false)
+                  }
+              }
+
+              @SuppressLint("SetJavaScriptEnabled")
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_main)
+
+                  val root = findViewById<FrameLayout>(R.id.root)
+                  webView = findViewById(R.id.webview)
+                  refresh = findViewById(R.id.refresh)
+                  progress = findViewById(R.id.progress)
+                  fullscreen = findViewById(R.id.fullscreen)
+
+                  cursor = CursorView(this)
+                  cursor.visibility = if (isTv) View.VISIBLE else View.GONE
+                  root.addView(
+                      cursor,
+                      FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                  )
+                  refresh.isEnabled = !isTv
+
+                  ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+                      val b = insets.getInsets(
+                          WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+                      )
+                      v.setPadding(b.left, b.top, b.right, b.bottom)
+                      WindowInsetsCompat.CONSUMED
+                  }
+
+                  with(webView.settings) {
+                      javaScriptEnabled = true
+                      domStorageEnabled = true
+                      mediaPlaybackRequiresUserGesture = false
+                      useWideViewPort = true
+                      loadWithOverviewMode = true
+                      mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                  }
+                  CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+
+                  webView.webChromeClient = chromeClient
+                  webView.webViewClient = object : WebViewClient() {
+                      override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                          val uri = request.url
+                          val host = uri.host ?: ""
+                          val internal = (uri.scheme == "http" || uri.scheme == "https") &&
+                                  (host == allowedHost || host.endsWith(".$allowedHost"))
+                          if (internal) return false
+                          try { startActivity(Intent(Intent.ACTION_VIEW, uri)) } catch (e: Exception) {}
+                          return true
+                      }
+
+                      override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                          refresh.isRefreshing = true
+                      }
+
+                      override fun onPageFinished(view: WebView, url: String?) {
+                          refresh.isRefreshing = false
+                      }
+
+                      override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                          if (request.isForMainFrame) {
+                              view.loadDataWithBaseURL(null, offlineHtml, "text/html", "UTF-8", null)
+                          }
+                      }
+                  }
+
+                  refresh.setOnRefreshListener { webView.reload() }
+                  refresh.setOnChildScrollUpCallback { _, _ -> webView.scrollY > 0 }
+
+                  onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+                      override fun handleOnBackPressed() {
+                          when {
+                              customView != null -> chromeClient.onHideCustomView()
+                              webView.canGoBack() -> webView.goBack()
+                              else -> { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
+                          }
+                      }
+                  })
+
+                  if (savedInstanceState != null) webView.restoreState(savedInstanceState)
+                  else webView.loadUrl(startUrl)
+              }
+
+              // ===== التحكم بالريموت =====
+              override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                  val down = event.action == KeyEvent.ACTION_DOWN
+
+                  when (event.keyCode) {
+                      KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> { if (down) videoJs("v.paused?v.play():v.pause()"); return true }
+                      KeyEvent.KEYCODE_MEDIA_PLAY -> { if (down) videoJs("v.play()"); return true }
+                      KeyEvent.KEYCODE_MEDIA_PAUSE -> { if (down) videoJs("v.pause()"); return true }
+                      KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { if (down) videoJs("v.currentTime+=10"); return true }
+                      KeyEvent.KEYCODE_MEDIA_REWIND -> { if (down) videoJs("v.currentTime-=10"); return true }
+                  }
+
+                  if (isTv) {
+                      when (event.keyCode) {
+                          KeyEvent.KEYCODE_DPAD_UP -> { if (down) moveCursor(0, -1, event.repeatCount); return true }
+                          KeyEvent.KEYCODE_DPAD_DOWN -> { if (down) moveCursor(0, 1, event.repeatCount); return true }
+                          KeyEvent.KEYCODE_DPAD_LEFT -> { if (down) moveCursor(-1, 0, event.repeatCount); return true }
+                          KeyEvent.KEYCODE_DPAD_RIGHT -> { if (down) moveCursor(1, 0, event.repeatCount); return true }
+                          KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                              if (down && event.repeatCount == 0) clickAtCursor()
+                              return true
+                          }
+                      }
+                  }
+                  return super.dispatchKeyEvent(event)
+              }
+
+              private fun videoJs(code: String) {
+                  webView.evaluateJavascript(
+                      "(function(){var v=document.querySelector('video');if(!v)return;$code})()", null
+                  )
+              }
+
+              private fun moveCursor(dx: Int, dy: Int, repeat: Int) {
+                  val d = resources.displayMetrics.density
+                  val step = (16 * d * (1f + minOf(repeat, 15) / 6f)).toInt()
+                  val edge = 48 * d
+                  val w = cursor.width.toFloat()
+                  val h = cursor.height.toFloat()
+                  if (customView == null) {
+                      if (dy < 0 && cursor.cy <= edge) { webView.scrollBy(0, -step); return }
+                      if (dy > 0 && cursor.cy >= h - edge) { webView.scrollBy(0, step); return }
+                  }
+                  cursor.cx = (cursor.cx + dx * step).coerceIn(0f, w - 1f)
+                  cursor.cy = (cursor.cy + dy * step).coerceIn(0f, h - 1f)
+                  cursor.invalidate()
+              }
+
+              private fun clickAtCursor() {
+                  val target: View = customView ?: webView
+                  val tl = IntArray(2)
+                  val cl = IntArray(2)
+                  target.getLocationOnScreen(tl)
+                  cursor.getLocationOnScreen(cl)
+                  val x = cl[0] + cursor.cx - tl[0]
+                  val y = cl[1] + cursor.cy - tl[1]
+                  val t = SystemClock.uptimeMillis()
+                  val down = MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, x, y, 0)
+                  down.source = InputDevice.SOURCE_TOUCHSCREEN
+                  target.dispatchTouchEvent(down)
+                  down.recycle()
+                  target.postDelayed({
+                      val up = MotionEvent.obtain(t, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y, 0)
+                      up.source = InputDevice.SOURCE_TOUCHSCREEN
+                      target.dispatchTouchEvent(up)
+                      up.recycle()
+                  }, 70)
+              }
+
+              private fun hideBars(hide: Boolean) {
+                  val c = WindowCompat.getInsetsController(window, window.decorView)
+                  if (hide) {
+                      c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                      c.hide(WindowInsetsCompat.Type.systemBars())
+                  } else {
+                      c.show(WindowInsetsCompat.Type.systemBars())
+                  }
+              }
+
+              override fun onSaveInstanceState(outState: Bundle) {
+                  super.onSaveInstanceState(outState)
+                  webView.saveState(outState)
+              }
+
+              override fun onPause() { webView.onPause(); super.onPause() }
+              override fun onResume() { super.onResume(); webView.onResume() }
+              override fun onDestroy() { webView.destroy(); super.onDestroy() }
+          }
+          EOF
+          cat > app/src/main/java/com/example/vodumovie/CursorView.kt <<'EOF'
+          package com.example.vodumovie
+
+          import android.content.Context
+          import android.graphics.Canvas
+          import android.graphics.Color
+          import android.graphics.Paint
+          import android.graphics.Path
+          import android.view.View
+
+          class CursorView(context: Context) : View(context) {
+              var cx = -1f
+              var cy = -1f
+              private val d = resources.displayMetrics.density * 1.4f
+              private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                  color = Color.WHITE
+                  style = Paint.Style.FILL
+              }
+              private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                  color = Color.BLACK
+                  style = Paint.Style.STROKE
+                  strokeWidth = 2f * resources.displayMetrics.density
+              }
+              private val pts = floatArrayOf(0f, 0f, 0f, 17f, 4f, 13f, 7f, 20f, 9.5f, 19f, 6.5f, 12f, 12f, 12f)
+
+              override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+                  super.onSizeChanged(w, h, oldw, oldh)
+                  if (cx < 0f) {
+                      cx = w / 2f
+                      cy = h / 2f
+                  }
+              }
+
+              override fun onDraw(canvas: Canvas) {
+                  val p = Path()
+                  p.moveTo(cx + pts[0] * d, cy + pts[1] * d)
+                  var i = 2
+                  while (i < pts.size) {
+                      p.lineTo(cx + pts[i] * d, cy + pts[i + 1] * d)
+                      i += 2
+                  }
+                  p.close()
+                  canvas.drawPath(p, fill)
+                  canvas.drawPath(p, line)
+              }
+          }
+          EOF
+      - name: Build
+        run: gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-tv
+          path: app/build/outputs/apk/debug/app-debug.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tv-${{ github.run_number }}
+          name: Android TV + phone (tv-${{ github.run_number }})
+          files: app/build/outputs/apk/debug/app-debug.apk
